@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tarefas</title>
+<style>
+:root{
+  --bg:#0a0a0a; --surface:#141414; --surface2:#1a1a1a; --border:#1f1f1f;
+  --text:#e5e5e5; --muted:#6b7280; --accent:#c5f02c; --accent-d:#9bc01f;
+  --danger:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;height:100%}
+body{display:flex;overflow:hidden}
+button{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+
+/* sidebar */
+.sb{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+.sb-h{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.sb-h .logo{color:var(--accent);font-weight:700;font-size:16px;letter-spacing:.5px}
+.sb-lists{flex:1;overflow-y:auto;padding:8px}
+.sb-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--text);user-select:none;position:relative}
+.sb-item:hover{background:var(--surface2)}
+.sb-item.active{background:#222;border-left:3px solid var(--accent);padding-left:7px}
+.sb-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-item .count{font-size:11px;color:var(--muted);background:#222;padding:1px 6px;border-radius:10px}
+.sb-item .del{opacity:0;color:var(--muted);font-size:14px;padding:0 4px}
+.sb-item:hover .del{opacity:.7}
+.sb-item .del:hover{color:var(--danger);opacity:1}
+.sb-add{padding:10px;border-top:1px solid var(--border)}
+.sb-add button{width:100%;padding:8px;background:var(--surface2);border-radius:6px;color:var(--text);border:1px dashed #333}
+.sb-add button:hover{background:#222;border-color:var(--accent);color:var(--accent)}
+.sb-foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.sb-foot button{color:var(--muted);font-size:11px}
+.sb-foot button:hover{color:var(--accent)}
+.sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;margin-right:6px}
+.sync-dot.ok{background:var(--accent)}
+.sync-dot.syncing{background:#fbbf24;animation:pulse 1s infinite}
+.sync-dot.err{background:var(--danger)}
+@keyframes pulse{50%{opacity:.4}}
+
+/* main */
+.main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.m-h{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.m-h h1{margin:0;font-size:22px;font-weight:600;flex:1;outline:none}
+.m-h h1[contenteditable]:focus{outline:1px solid var(--accent);outline-offset:4px;border-radius:4px}
+.m-h .meta{font-size:12px;color:var(--muted)}
+.tasks{flex:1;overflow-y:auto;padding:20px 32px 100px}
+.empty{color:var(--muted);text-align:center;padding:80px 20px;font-size:13px}
+
+/* task */
+.t{display:flex;align-items:flex-start;gap:10px;padding:5px 0;border-radius:4px;position:relative}
+.t:hover{background:rgba(255,255,255,.02)}
+.t .grip{position:absolute;left:-18px;top:8px;color:#333;font-size:12px;opacity:0;cursor:grab}
+.t:hover .grip{opacity:1}
+.t .cb{flex:none;width:18px;height:18px;margin-top:4px;border:1.5px solid #444;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;transition:all .15s}
+.t .cb:hover{border-color:var(--accent)}
+.t.done .cb{background:var(--accent);border-color:var(--accent)}
+.t.done .cb::after{content:"";width:5px;height:9px;border:solid #0a0a0a;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.t .txt{flex:1;outline:none;padding:2px 4px;min-height:22px;word-break:break-word}
+.t .txt:empty::before{content:"Tarefa...";color:#3a3a3a}
+.t.done .txt{text-decoration:line-through;color:var(--muted)}
+.t .delbtn{opacity:0;color:var(--muted);padding:2px 6px;font-size:14px}
+.t:hover .delbtn{opacity:.5}
+.t .delbtn:hover{color:var(--danger);opacity:1}
+.t[data-depth="1"]{margin-left:32px}
+.t[data-depth="2"]{margin-left:64px}
+.t[data-depth="3"]{margin-left:96px}
+.t[data-depth="4"]{margin-left:128px}
+
+/* dialog */
+.dlg-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+.dlg-bg.show{display:flex}
+.dlg{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:320px}
+.dlg h3{margin:0 0 14px;font-size:15px}
+.dlg input{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);margin-bottom:14px}
+.dlg input:focus{outline:none;border-color:var(--accent)}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end}
+.dlg .row button{padding:7px 14px;border-radius:6px;background:var(--surface2)}
+.dlg .row button.pri{background:var(--accent);color:#0a0a0a;font-weight:600}
+.dlg .row button:hover{background:#222}
+.dlg .row button.pri:hover{background:var(--accent-d)}
+
+/* toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 16px;font-size:13px;z-index:200;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+.toast.err{border-color:var(--danger);color:#fca5a5}
+.toast.ok{border-color:var(--accent);color:var(--accent)}
+
+/* sync config */
+.cfg{padding:18px;width:380px}
+.cfg label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+.cfg .hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<aside class="sb">
+  <div class="sb-h">
+    <span class="logo">▸ TAREFAS</span>
+  </div>
+  <div class="sb-lists" id="lists"></div>
+  <div class="sb-add">
+    <button onclick="newList()">+ Nova lista</button>
+  </div>
+  <div class="sb-foot">
+    <span><span class="sync-dot" id="syncDot"></span><span id="syncTxt">local</span></span>
+    <button onclick="openSync()">⚙</button>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="m-h">
+    <h1 id="listTitle" contenteditable spellcheck="false">Tarefas</h1>
+    <span class="meta" id="listMeta"></span>
+  </div>
+  <div class="tasks" id="tasks"></div>
+</main>
+
+<div class="dlg-bg" id="dlgNew">
+  <div class="dlg">
+    <h3>Nova lista</h3>
+    <input id="newListName" placeholder="Nome da lista" maxlength="60">
+    <div class="row">
+      <button onclick="closeDlg('dlgNew')">Cancelar</button>
+      <button class="pri" onclick="confirmNewList()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<div class="dlg-bg" id="dlgSync">
+  <div class="dlg cfg">
+    <h3>Sync GitHub</h3>
+    <label>Personal Access Token (repo scope)</label>
+    <input id="ghToken" placeholder="ghp_..." type="password">
+    <label>Repo (owner/name)</label>
+    <input id="ghRepo" placeholder="brunotropolis/tarefas">
+    <label>Caminho do arquivo</label>
+    <input id="ghPath" placeholder="data.json" value="data.json">
+    <div class="hint">O token é salvo só no localStorage do seu navegador. Cada save no app commita data.json no repo. Deixe vazio pra rodar 100% offline.</div>
+    <div class="row" style="margin-top:14px">
+      <button onclick="closeDlg('dlgSync')">Fechar</button>
+      <button class="pri" onclick="saveSyncConfig()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const LS_KEY = "tarefas_data_v1";
+const LS_CFG = "tarefas_sync_v1";
+
+const state = {
+  lists: [],
+  activeId: null,
+};
+
+let cfg = JSON.parse(localStorage.getItem(LS_CFG) || "{}");
+let syncTimer = null;
+let remoteSha = null;
+
+function uid(){ return Math.random().toString(36).slice(2,10) }
+function nowISO(){ return new Date().toISOString() }
+
+function load(){
+  const raw = localStorage.getItem(LS_KEY);
+  if(raw){
+    try{ Object.assign(state, JSON.parse(raw)); }catch(e){}
+  }
+  if(!state.lists || !state.lists.length){
+    const id = uid();
+    state.lists = [{id, name:"Inbox", tasks:[], createdAt:nowISO()}];
+    state.activeId = id;
+  }
+  if(!state.activeId || !state.lists.find(l=>l.id===state.activeId)){
+    state.activeId = state.lists[0].id;
+  }
+}
+
+function save(){
+  localStorage.setItem(LS_KEY, JSON.stringify({lists:state.lists, activeId:state.activeId}));
+  scheduleSync();
+}
+
+/* ---- render ---- */
+
+function activeList(){ return state.lists.find(l=>l.id===state.activeId) }
+
+function renderSidebar(){
+  const c = document.getElementById("lists");
+  c.innerHTML = "";
+  state.lists.forEach(l=>{
+    const open = (l.tasks||[]).filter(t=>!t.done).length;
+    const d = document.createElement("div");
+    d.className = "sb-item" + (l.id===state.activeId ? " active":"");
+    d.innerHTML = `<span class="name"></span><span class="count">${open}</span><button class="del" title="Excluir lista">×</button>`;
+    d.querySelector(".name").textContent = l.name;
+    d.onclick = (e)=>{ if(e.target.classList.contains("del")) return; state.activeId=l.id; save(); render(); };
+    d.querySelector(".del").onclick = (e)=>{ e.stopPropagation(); deleteList(l.id); };
+    c.appendChild(d);
+  });
+}
+
+function renderMain(){
+  const l = activeList();
+  document.getElementById("listTitle").textContent = l.name;
+  const tasks = l.tasks || [];
+  const open = tasks.filter(t=>!t.done).length;
+  const done = tasks.length - open;
+  document.getElementById("listMeta").textContent = tasks.length ? `${open} aberto · ${done} feito` : "";
+
+  const c = document.getElementById("tasks");
+  c.innerHTML = "";
+  if(!tasks.length){
+    c.innerHTML = `<div class="empty">Sem tarefas. Clique aqui pra criar a primeira.</div>`;
+    c.querySelector(".empty").onclick = ()=>addTask(0);
+    return;
+  }
+  tasks.forEach((t,i)=>c.appendChild(taskEl(t,i)));
+}
+
+function taskEl(t, idx){
+  const d = document.createElement("div");
+  d.className = "t" + (t.done?" done":"");
+  d.dataset.idx = idx;
+  d.dataset.depth = t.depth || 0;
+  d.innerHTML = `
+    <span class="grip">⋮⋮</span>
+    <button class="cb" title="Marcar"></button>
+    <div class="txt" contenteditable spellcheck="false"></div>
+    <button class="delbtn" title="Excluir">×</button>
+  `;
+  const txt = d.querySelector(".txt");
+  txt.textContent = t.text || "";
+  txt.onkeydown = (e)=>handleKey(e, idx);
+  txt.oninput = ()=>{ activeList().tasks[idx].text = txt.textContent; save(); document.getElementById("listMeta").textContent && renderSidebar(); };
+  txt.onblur = ()=>renderSidebar();
+  d.querySelector(".cb").onclick = ()=>toggleDone(idx);
+  d.querySelector(".delbtn").onclick = ()=>delTask(idx);
+  return d;
+}
+
+function focusTask(idx, atEnd=true){
+  const el = document.querySelectorAll(".t .txt")[idx];
+  if(!el) return;
+  el.focus();
+  const r = document.createRange(); const s = window.getSelection();
+  r.selectNodeContents(el); r.collapse(!atEnd); s.removeAllRanges(); s.addRange(r);
+}
+
+function handleKey(e, idx){
+  const l = activeList();
+  const t = l.tasks[idx];
+  if(e.key === "Enter" && !e.shiftKey){
+    e.preventDefault();
+    const nt = {id:uid(), text:"", done:false, depth:t.depth||0, createdAt:nowISO()};
+    l.tasks.splice(idx+1, 0, nt);
+    save(); renderMain(); renderSidebar();
+    focusTask(idx+1);
+  } else if(e.key === "Tab"){
+    e.preventDefault();
+    if(e.shiftKey){
+      t.depth = Math.max(0, (t.depth||0) - 1);
+    } else {
+      t.depth = Math.min(4, (t.depth||0) + 1);
+    }
+    save(); renderMain();
+    focusTask(idx);
+  } else if(e.key === "Backspace" && !t.text){
+    e.preventDefault();
+    if(l.tasks.length === 1){ return; }
+    l.tasks.splice(idx,1);
+    save(); renderMain(); renderSidebar();
+    focusTask(Math.max(0, idx-1));
+  } else if(e.key === "ArrowUp" && idx > 0){
+    e.preventDefault(); focusTask(idx-1);
+  } else if(e.key === "ArrowDown" && idx < l.tasks.length - 1){
+    e.preventDefault(); focusTask(idx+1);
+  }
+}
+
+function addTask(idx){
+  const l = activeList();
+  const nt = {id:uid(), text:"", done:false, depth:0, createdAt:nowISO()};
+  l.tasks.splice(idx, 0, nt);
+  save(); renderMain(); renderSidebar();
+  focusTask(idx);
+}
+
+function toggleDone(idx){
+  const l = activeList();
+  l.tasks[idx].done = !l.tasks[idx].done;
+  l.tasks[idx].doneAt = l.tasks[idx].done ? nowISO() : null;
+  save(); renderMain(); renderSidebar();
+}
+
+function delTask(idx){
+  const l = activeList();
+  l.tasks.splice(idx,1);
+  save(); renderMain(); renderSidebar();
+}
+
+/* lists */
+
+function newList(){
+  document.getElementById("newListName").value = "";
+  document.getElementById("dlgNew").classList.add("show");
+  setTimeout(()=>document.getElementById("newListName").focus(), 30);
+}
+function confirmNewList(){
+  const name = document.getElementById("newListName").value.trim();
+  if(!name) return;
+  const id = uid();
+  state.lists.push({id, name, tasks:[], createdAt:nowISO()});
+  state.activeId = id;
+  closeDlg("dlgNew");
+  save(); render();
+}
+function deleteList(id){
+  if(state.lists.length <= 1){ toast("Você precisa de pelo menos uma lista","err"); return; }
+  const l = state.lists.find(x=>x.id===id);
+  if(!confirm(`Excluir a lista "${l.name}" e suas ${(l.tasks||[]).length} tarefas?`)) return;
+  state.lists = state.lists.filter(x=>x.id!==id);
+  if(state.activeId === id) state.activeId = state.lists[0].id;
+  save(); render();
+}
+
+document.getElementById("listTitle").addEventListener("blur", e=>{
+  const v = e.target.textContent.trim();
+  const l = activeList();
+  if(v && v !== l.name){ l.name = v; save(); renderSidebar(); }
+  else { e.target.textContent = l.name; }
+});
+document.getElementById("listTitle").addEventListener("keydown", e=>{
+  if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); }
+});
+
+document.getElementById("tasks").addEventListener("click", e=>{
+  if(e.target.id === "tasks" || e.target.classList.contains("tasks")){
+    const l = activeList();
+    addTask(l.tasks.length);
+  }
+});
+
+function closeDlg(id){ document.getElementById(id).classList.remove("show") }
+
+/* sync */
+
+function openSync(){
+  document.getElementById("ghToken").value = cfg.token || "";
+  document.getElementById("ghRepo").value = cfg.repo || "";
+  document.getElementById("ghPath").value = cfg.path || "data.json";
+  document.getElementById("dlgSync").classList.add("show");
+}
+function saveSyncConfig(){
+  cfg = {
+    token: document.getElementById("ghToken").value.trim(),
+    repo: document.getElementById("ghRepo").value.trim(),
+    path: document.getElementById("ghPath").value.trim() || "data.json",
+  };
+  localStorage.setItem(LS_CFG, JSON.stringify(cfg));
+  closeDlg("dlgSync");
+  remoteSha = null;
+  if(cfg.token && cfg.repo){ pullThenSync(); }
+  else { setSync("local","local") }
+}
+
+function setSync(cls, txt){
+  const dot = document.getElementById("syncDot");
+  dot.className = "sync-dot " + (cls||"");
+  document.getElementById("syncTxt").textContent = txt;
+}
+
+function scheduleSync(){
+  if(!cfg.token || !cfg.repo) return;
+  clearTimeout(syncTimer);
+  setSync("syncing","salvando...");
+  syncTimer = setTimeout(pushToGithub, 1200);
+}
+
+async function ghFetch(method, path, body){
+  const r = await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`, {
+    method,
+    headers:{
+      "Authorization":`Bearer ${cfg.token}`,
+      "Accept":"application/vnd.github+json",
+      "Content-Type":"application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return r;
+}
+
+async function pullThenSync(){
+  setSync("syncing","puxando...");
+  try{
+    const r = await ghFetch("GET", cfg.path);
+    if(r.status === 200){
+      const j = await r.json();
+      remoteSha = j.sha;
+      const raw = atob(j.content.replace(/\n/g,""));
+      const remote = JSON.parse(decodeURIComponent(escape(raw)));
+      if(confirm("Achei dados no GitHub. Sobrescrever os dados locais com o que está no GitHub?")){
+        state.lists = remote.lists || state.lists;
+        state.activeId = remote.activeId || state.lists[0]?.id;
+        localStorage.setItem(LS_KEY, JSON.stringify({lists:state.lists, activeId:state.activeId}));
+        render();
+        setSync("ok","sincronizado");
+      } else {
+        scheduleSync();
+      }
+    } else if(r.status === 404){
+      remoteSha = null;
+      scheduleSync();
+    } else {
+      const t = await r.text();
+      setSync("err","erro");
+      toast("GitHub: "+r.status+" "+t.slice(0,80), "err");
+    }
+  } catch(e){
+    setSync("err","offline");
+  }
+}
+
+async function pushToGithub(){
+  if(!cfg.token || !cfg.repo) return;
+  setSync("syncing","salvando...");
+  try{
+    const payload = {lists:state.lists, activeId:state.activeId, savedAt:nowISO()};
+    const json = JSON.stringify(payload, null, 2);
+    const content = btoa(unescape(encodeURIComponent(json)));
+    const body = {message:"update tarefas", content, sha: remoteSha || undefined};
+    let r = await ghFetch("PUT", cfg.path, body);
+    if(r.status === 409 || r.status === 422){
+      const get = await ghFetch("GET", cfg.path);
+      if(get.ok){ remoteSha = (await get.json()).sha; body.sha = remoteSha; r = await ghFetch("PUT", cfg.path, body); }
+    }
+    if(r.ok){
+      const j = await r.json();
+      remoteSha = j.content.sha;
+      setSync("ok","sincronizado");
+    } else {
+      const t = await r.text();
+      setSync("err","erro");
+      toast("GitHub: "+r.status+" "+t.slice(0,80), "err");
+    }
+  } catch(e){
+    setSync("err","offline");
+  }
+}
+
+function toast(msg, kind){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast show " + (kind||"");
+  setTimeout(()=>t.className = "toast", 2500);
+}
+
+function render(){ renderSidebar(); renderMain(); }
+
+load(); render();
+if(cfg.token && cfg.repo){ pullThenSync(); } else { setSync("local","local"); }
+
+// global hotkey: ctrl/cmd+N nova lista, ctrl/cmd+Enter nova tarefa
+document.addEventListener("keydown", e=>{
+  if((e.ctrlKey||e.metaKey) && e.key==="n"){ e.preventDefault(); newList(); }
+});
+</script>
+</body>
+</html>
