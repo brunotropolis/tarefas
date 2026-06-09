@@ -256,6 +256,13 @@ function handleKey(e, idx){
   const t = l.tasks[idx];
   if(e.key === "Enter" && !e.shiftKey){
     e.preventDefault();
+    // linha vazia + indentada → volta 1 nível (igual Google Docs)
+    if(!t.text && (t.depth||0) > 0){
+      t.depth = (t.depth||0) - 1;
+      save(); renderMain();
+      focusTask(idx);
+      return;
+    }
     const nt = {id:uid(), text:"", done:false, depth:t.depth||0, createdAt:nowISO()};
     l.tasks.splice(idx+1, 0, nt);
     save(); renderMain(); renderSidebar();
