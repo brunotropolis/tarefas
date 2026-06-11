@@ -433,8 +433,16 @@ function addTask(idx){
 
 function toggleDone(idx){
   const l = activeList();
-  l.tasks[idx].done = !l.tasks[idx].done;
-  l.tasks[idx].doneAt = l.tasks[idx].done ? nowISO() : null;
+  const target = !l.tasks[idx].done;
+  const baseDepth = l.tasks[idx].depth || 0;
+  // marca a tarefa + todos os subitens contíguos (depth maior)
+  let i = idx;
+  while(i < l.tasks.length){
+    if(i !== idx && (l.tasks[i].depth || 0) <= baseDepth) break;
+    l.tasks[i].done = target;
+    l.tasks[i].doneAt = target ? nowISO() : null;
+    i++;
+  }
   save(); renderMain(); renderSidebar();
 }
 
