@@ -47,13 +47,42 @@ input{font:inherit;color:inherit}
 .m-h h1{margin:0;font-size:22px;font-weight:600;flex:1;outline:none}
 .m-h h1[contenteditable]:focus{outline:1px solid var(--accent);outline-offset:4px;border-radius:4px}
 .m-h .meta{font-size:12px;color:var(--muted)}
+.m-body{flex:1;display:flex;overflow:hidden}
 .tasks{flex:1;overflow-y:auto;padding:20px 32px 100px}
+.tasks-end{height:80px}
 .empty{color:var(--muted);text-align:center;padding:80px 20px;font-size:13px}
+
+/* done panel (right) */
+.done-panel{width:300px;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;transition:width .2s}
+.done-panel.collapsed{width:42px}
+.dp-h{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.dp-h .ic{color:var(--accent)}
+.dp-h .ttl{font-size:13px;font-weight:600;flex:1;color:var(--text)}
+.dp-h .ct{font-size:11px;color:var(--muted);background:#222;padding:1px 7px;border-radius:10px}
+.dp-h .clear{font-size:11px;color:var(--muted);opacity:0}
+.dp-h:hover .clear{opacity:.6}
+.dp-h .clear:hover{color:var(--danger);opacity:1}
+.done-panel.collapsed .ttl,.done-panel.collapsed .ct,.done-panel.collapsed .clear{display:none}
+.dp-list{flex:1;overflow-y:auto;padding:10px 14px 60px}
+.done-panel.collapsed .dp-list{display:none}
+.dp-empty{color:var(--muted);font-size:12px;text-align:center;padding:30px 10px;line-height:1.5}
+.dp-t{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-radius:4px}
+.dp-t:hover{background:rgba(255,255,255,.02)}
+.dp-t .cb{flex:none;width:16px;height:16px;margin-top:3px;border:1.5px solid var(--accent);border-radius:4px;background:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.dp-t .cb::after{content:"";width:4px;height:8px;border:solid #0a0a0a;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.dp-t .txt{flex:1;font-size:13px;color:var(--muted);text-decoration:line-through;word-break:break-word;padding:1px 2px}
+.dp-t .delbtn{opacity:0;color:var(--muted);padding:0 4px;font-size:13px}
+.dp-t:hover .delbtn{opacity:.5}
+.dp-t .delbtn:hover{color:var(--danger);opacity:1}
 
 /* task */
 .t{display:flex;align-items:flex-start;gap:10px;padding:5px 0;border-radius:4px;position:relative}
 .t:hover{background:rgba(255,255,255,.02)}
-.t .grip{position:absolute;left:-18px;top:8px;color:#333;font-size:12px;opacity:0;cursor:grab}
+.t.dragging{opacity:.35}
+.t.drop-above::before{content:"";position:absolute;left:0;right:0;top:-2px;height:2px;background:var(--accent);border-radius:2px;box-shadow:0 0 6px var(--accent)}
+.t.drop-below::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:var(--accent);border-radius:2px;box-shadow:0 0 6px var(--accent)}
+.t .grip{position:absolute;left:-18px;top:6px;color:#444;font-size:14px;opacity:0;cursor:grab;padding:2px 4px;user-select:none}
+.t .grip:active{cursor:grabbing}
 .t:hover .grip{opacity:1}
 .t .cb{flex:none;width:18px;height:18px;margin-top:4px;border:1.5px solid #444;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;transition:all .15s}
 .t .cb:hover{border-color:var(--accent)}
@@ -116,7 +145,18 @@ input{font:inherit;color:inherit}
     <h1 id="listTitle" contenteditable spellcheck="false">Tarefas</h1>
     <span class="meta" id="listMeta"></span>
   </div>
-  <div class="tasks" id="tasks"></div>
+  <div class="m-body">
+    <div class="tasks" id="tasks"></div>
+    <aside class="done-panel" id="donePanel">
+      <div class="dp-h" id="dpHead">
+        <span class="ic">✓</span>
+        <span class="ttl">Concluídas</span>
+        <span class="ct" id="doneCount">0</span>
+        <button class="clear" id="clearDone" title="Limpar concluídas">limpar</button>
+      </div>
+      <div class="dp-list" id="doneList"></div>
+    </aside>
+  </div>
 </main>
 
 <div class="dlg-bg" id="dlgNew">
@@ -208,27 +248,56 @@ function renderMain(){
   const l = activeList();
   document.getElementById("listTitle").textContent = l.name;
   const tasks = l.tasks || [];
-  const open = tasks.filter(t=>!t.done).length;
-  const done = tasks.length - open;
-  document.getElementById("listMeta").textContent = tasks.length ? `${open} aberto · ${done} feito` : "";
+  const pending = tasks.map((t,i)=>({t,i})).filter(x=>!x.t.done);
+  const doneTasks = tasks.map((t,i)=>({t,i})).filter(x=>x.t.done);
+  document.getElementById("listMeta").textContent = tasks.length ? `${pending.length} aberto · ${doneTasks.length} feito` : "";
 
+  // pending list
   const c = document.getElementById("tasks");
   c.innerHTML = "";
-  if(!tasks.length){
-    c.innerHTML = `<div class="empty">Sem tarefas. Clique aqui pra criar a primeira.</div>`;
-    c.querySelector(".empty").onclick = ()=>addTask(0);
-    return;
+  if(!pending.length){
+    c.innerHTML = `<div class="empty">Sem tarefas pendentes. Clique aqui pra criar uma.</div>`;
+    c.querySelector(".empty").onclick = ()=>addTask(tasks.length);
+  } else {
+    pending.forEach(({t,i})=>c.appendChild(taskEl(t,i)));
   }
-  tasks.forEach((t,i)=>c.appendChild(taskEl(t,i)));
+  // drop zone at the end
+  const endZone = document.createElement("div");
+  endZone.className = "tasks-end";
+  endZone.addEventListener("dragover", e=>{
+    if(dragIdx === null) return;
+    e.preventDefault();
+    clearDropMarkers();
+    const last = c.querySelector(".t:last-of-type");
+    if(last) last.classList.add("drop-below");
+  });
+  endZone.addEventListener("drop", e=>{
+    if(dragIdx === null) return;
+    e.preventDefault();
+    moveTask(dragIdx, tasks.length); // append at end
+  });
+  c.appendChild(endZone);
+
+  // done panel
+  const dl = document.getElementById("doneList");
+  document.getElementById("doneCount").textContent = doneTasks.length;
+  dl.innerHTML = "";
+  if(!doneTasks.length){
+    dl.innerHTML = `<div class="dp-empty">As tarefas que você marcar como feitas aparecem aqui.</div>`;
+  } else {
+    // mais recentes primeiro
+    doneTasks.sort((a,b)=> (b.t.doneAt||"").localeCompare(a.t.doneAt||""));
+    doneTasks.forEach(({t,i})=>dl.appendChild(doneEl(t,i)));
+  }
 }
 
 function taskEl(t, idx){
   const d = document.createElement("div");
-  d.className = "t" + (t.done?" done":"");
+  d.className = "t";
   d.dataset.idx = idx;
   d.dataset.depth = t.depth || 0;
   d.innerHTML = `
-    <span class="grip">⋮⋮</span>
+    <span class="grip" title="Arrastar">⋮⋮</span>
     <button class="cb" title="Marcar"></button>
     <div class="txt" contenteditable spellcheck="false"></div>
     <button class="delbtn" title="Excluir">×</button>
@@ -236,19 +305,84 @@ function taskEl(t, idx){
   const txt = d.querySelector(".txt");
   txt.textContent = t.text || "";
   txt.onkeydown = (e)=>handleKey(e, idx);
-  txt.oninput = ()=>{ activeList().tasks[idx].text = txt.textContent; save(); document.getElementById("listMeta").textContent && renderSidebar(); };
+  txt.oninput = ()=>{ activeList().tasks[idx].text = txt.textContent; save(); };
   txt.onblur = ()=>renderSidebar();
+  d.querySelector(".cb").onclick = ()=>toggleDone(idx);
+  d.querySelector(".delbtn").onclick = ()=>delTask(idx);
+  setupDrag(d, idx);
+  return d;
+}
+
+function doneEl(t, idx){
+  const d = document.createElement("div");
+  d.className = "dp-t";
+  d.dataset.idx = idx;
+  d.innerHTML = `
+    <button class="cb" title="Reabrir"></button>
+    <div class="txt"></div>
+    <button class="delbtn" title="Excluir">×</button>
+  `;
+  d.querySelector(".txt").textContent = t.text || "(sem texto)";
   d.querySelector(".cb").onclick = ()=>toggleDone(idx);
   d.querySelector(".delbtn").onclick = ()=>delTask(idx);
   return d;
 }
 
 function focusTask(idx, atEnd=true){
-  const el = document.querySelectorAll(".t .txt")[idx];
+  const el = document.querySelector(`.t[data-idx="${idx}"] .txt`);
   if(!el) return;
   el.focus();
   const r = document.createRange(); const s = window.getSelection();
   r.selectNodeContents(el); r.collapse(!atEnd); s.removeAllRanges(); s.addRange(r);
+}
+
+/* drag & drop */
+let dragIdx = null;
+function clearDropMarkers(){
+  document.querySelectorAll(".drop-above,.drop-below").forEach(el=>el.classList.remove("drop-above","drop-below"));
+}
+function setupDrag(row, idx){
+  const grip = row.querySelector(".grip");
+  // só ativa draggable quando o usuário clicar no grip (senão quebra o contenteditable)
+  grip.addEventListener("mousedown", ()=>{ row.draggable = true; });
+  row.addEventListener("dragstart", e=>{
+    if(!row.draggable){ e.preventDefault(); return; }
+    dragIdx = idx;
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", String(idx)); }catch(_){}
+  });
+  row.addEventListener("dragend", ()=>{
+    row.draggable = false;
+    row.classList.remove("dragging");
+    clearDropMarkers();
+    dragIdx = null;
+  });
+  row.addEventListener("dragover", e=>{
+    if(dragIdx === null || dragIdx === idx) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    clearDropMarkers();
+    const r = row.getBoundingClientRect();
+    const before = (e.clientY - r.top) < r.height/2;
+    row.classList.add(before ? "drop-above" : "drop-below");
+  });
+  row.addEventListener("drop", e=>{
+    if(dragIdx === null || dragIdx === idx) return;
+    e.preventDefault();
+    const r = row.getBoundingClientRect();
+    const before = (e.clientY - r.top) < r.height/2;
+    const target = before ? idx : idx + 1;
+    moveTask(dragIdx, target);
+  });
+}
+function moveTask(from, to){
+  const l = activeList();
+  if(from === to || from === to - 1) return;
+  const [item] = l.tasks.splice(from, 1);
+  const adjTo = from < to ? to - 1 : to;
+  l.tasks.splice(adjTo, 0, item);
+  save(); renderMain(); renderSidebar();
 }
 
 function handleKey(e, idx){
@@ -346,10 +480,30 @@ document.getElementById("listTitle").addEventListener("keydown", e=>{
 });
 
 document.getElementById("tasks").addEventListener("click", e=>{
-  if(e.target.id === "tasks" || e.target.classList.contains("tasks")){
+  if(e.target.id === "tasks" || e.target.classList.contains("tasks") || e.target.classList.contains("tasks-end")){
     const l = activeList();
     addTask(l.tasks.length);
   }
+});
+
+document.getElementById("dpHead").addEventListener("click", e=>{
+  if(e.target.id === "clearDone") return;
+  const collapsed = localStorage.getItem("tarefas_dp_collapsed") === "1";
+  const next = !collapsed;
+  document.getElementById("donePanel").classList.toggle("collapsed", next);
+  localStorage.setItem("tarefas_dp_collapsed", next ? "1" : "0");
+});
+if(localStorage.getItem("tarefas_dp_collapsed") === "1"){
+  document.getElementById("donePanel").classList.add("collapsed");
+}
+document.getElementById("clearDone").addEventListener("click", e=>{
+  e.stopPropagation();
+  const l = activeList();
+  const n = l.tasks.filter(t=>t.done).length;
+  if(!n) return;
+  if(!confirm(`Excluir ${n} tarefa(s) concluída(s)?`)) return;
+  l.tasks = l.tasks.filter(t=>!t.done);
+  save(); renderMain(); renderSidebar();
 });
 
 function closeDlg(id){ document.getElementById(id).classList.remove("show") }
