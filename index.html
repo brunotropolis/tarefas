@@ -72,8 +72,8 @@ input{font:inherit;color:inherit}
 .dp-t .cb{flex:none;width:16px;height:16px;margin-top:3px;border:1.5px solid var(--accent);border-radius:4px;background:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .dp-t .cb::after{content:"";width:4px;height:8px;border:solid #0a0a0a;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
 .dp-t .txt{flex:1;font-size:13px;color:var(--muted);text-decoration:line-through;word-break:break-word;padding:1px 2px}
-.dp-t .delbtn{opacity:0;color:var(--muted);padding:0 4px;font-size:13px}
-.dp-t:hover .delbtn{opacity:.5}
+.dp-t .delbtn{opacity:.3;color:var(--muted);padding:0 6px;font-size:14px;cursor:pointer}
+.dp-t:hover .delbtn{opacity:.7}
 .dp-t .delbtn:hover{color:var(--danger);opacity:1}
 
 /* task */
@@ -92,8 +92,8 @@ input{font:inherit;color:inherit}
 .t .txt{flex:1;outline:none;padding:2px 4px;min-height:22px;word-break:break-word}
 .t .txt:empty::before{content:"Tarefa...";color:#3a3a3a}
 .t.done .txt{text-decoration:line-through;color:var(--muted)}
-.t .delbtn{opacity:0;color:var(--muted);padding:2px 6px;font-size:14px}
-.t:hover .delbtn{opacity:.5}
+.t .delbtn{opacity:.3;color:var(--muted);padding:2px 8px;font-size:16px;line-height:1;cursor:pointer}
+.t:hover .delbtn{opacity:.7}
 .t .delbtn:hover{color:var(--danger);opacity:1}
 .t[data-depth="1"]{margin-left:32px}
 .t[data-depth="2"]{margin-left:64px}
@@ -449,7 +449,11 @@ function toggleDone(idx){
 
 function delTask(idx){
   const l = activeList();
-  l.tasks.splice(idx,1);
+  const baseDepth = l.tasks[idx].depth || 0;
+  let count = 1;
+  while(idx + count < l.tasks.length && (l.tasks[idx+count].depth || 0) > baseDepth) count++;
+  if(count > 1 && !confirm(`Excluir esta tarefa e ${count-1} subitem(ns)?`)) return;
+  l.tasks.splice(idx, count);
   save(); renderMain(); renderSidebar();
 }
 
